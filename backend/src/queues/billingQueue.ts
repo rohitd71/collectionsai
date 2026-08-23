@@ -2,7 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import { supabase } from '../db/supabase';
 import { recalculateCommissionForUser } from '../services/BillingCalculator';
 import { chargeMonthlyCommission } from '../services/StripeService';
-import { connection } from './redis';
+import { connection, createWorkerConnection } from './redis';
 
 export const billingQueue = new Queue('billing', { connection });
 
@@ -36,6 +36,6 @@ export function startBillingWorker() {
       }
       return { users_billed: billed };
     },
-    { connection }
+    { connection: createWorkerConnection() }
   );
 }

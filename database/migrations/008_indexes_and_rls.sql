@@ -19,14 +19,17 @@ ALTER TABLE escalations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing ENABLE ROW LEVEL SECURITY;
 
 -- users: a user can only read/update their own row
+DROP POLICY IF EXISTS users_self ON users;
 CREATE POLICY users_self ON users
   FOR ALL USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
 -- campaigns: owned directly by user_id
+DROP POLICY IF EXISTS campaigns_owner ON campaigns;
 CREATE POLICY campaigns_owner ON campaigns
   FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- accounts: owned via campaign -> user
+DROP POLICY IF EXISTS accounts_owner ON accounts;
 CREATE POLICY accounts_owner ON accounts
   FOR ALL USING (
     campaign_id IN (SELECT id FROM campaigns WHERE user_id = auth.uid())
@@ -36,6 +39,7 @@ CREATE POLICY accounts_owner ON accounts
   );
 
 -- calls: owned via account -> campaign -> user
+DROP POLICY IF EXISTS calls_owner ON calls;
 CREATE POLICY calls_owner ON calls
   FOR ALL USING (
     account_id IN (
@@ -53,6 +57,7 @@ CREATE POLICY calls_owner ON calls
   );
 
 -- sms_messages: owned via account -> campaign -> user
+DROP POLICY IF EXISTS sms_messages_owner ON sms_messages;
 CREATE POLICY sms_messages_owner ON sms_messages
   FOR ALL USING (
     account_id IN (
@@ -70,6 +75,7 @@ CREATE POLICY sms_messages_owner ON sms_messages
   );
 
 -- escalations: owned via call -> account -> campaign -> user
+DROP POLICY IF EXISTS escalations_owner ON escalations;
 CREATE POLICY escalations_owner ON escalations
   FOR ALL USING (
     call_id IN (
@@ -89,6 +95,7 @@ CREATE POLICY escalations_owner ON escalations
   );
 
 -- billing: owned directly by user_id
+DROP POLICY IF EXISTS billing_owner ON billing;
 CREATE POLICY billing_owner ON billing
   FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 

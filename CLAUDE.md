@@ -29,7 +29,18 @@ unit tests cover pure logic only (billing math, phone normalization).
 | Auth | Custom bcrypt + JWT, own `users` table (not Supabase Auth) |
 | Third-party APIs | Vapi (voice calls), Twilio (SMS), Anthropic Claude (`claude-sonnet-5` — prompt generation + transcript analysis), Stripe (commission billing) |
 | Testing | Vitest (backend unit tests only) |
+| Logging | pino (JSON in production, pretty-printed in dev; redacts tokens/passwords) |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) — typecheck + test + build on push/PR |
+
+**Production hardening already in place**: `backend/src/env.ts` validates all config at
+startup with zod — a missing required var crashes immediately with a clear message
+rather than failing obscurely mid-request; missing Vapi/Twilio/Anthropic/Stripe keys
+only warn, since those features are optional until used. `api.ts`/`worker.ts` handle
+SIGTERM/SIGINT for graceful shutdown (drain requests, let in-progress BullMQ jobs
+finish, close Redis connections). `GET /health/ready` checks Supabase + Redis are
+actually reachable. CORS fails closed if `FRONTEND_URL` isn't set (not `*`). BullMQ
+Workers get their own dedicated Redis connection, separate from their Queue's —
+sharing one is a known footgun since a Worker's blocking calls can stall it.
 
 **Why not Supabase Realtime/Auth**: this backend uses its own JWT auth against a plain
 `users` table, so a browser holding only the Supabase anon key has no `auth.uid()` —
@@ -41,14 +52,19 @@ with a one-time ticket rather than a JWT in the URL.
 
 ```
 backend/            Express API + BullMQ workers (TypeScript)
+  src/env.ts           Zod-validated env config — import this, not process.env directly
+  src/logger.ts        pino logger (structured JSON in prod, pretty in dev)
   src/app.ts           Express app config (middleware, routes) — no listen()
-  src/api.ts           API-only entry point (imports app.ts, calls listen())
-  src/worker.ts        Worker-only entry point (BullMQ workers, no Express)
+  src/api.ts           API-only entry point (imports app.ts, calls listen(), graceful shutdown)
+  src/worker.ts        Worker-only entry point (BullMQ workers, no Express, graceful shutdown)
   src/index.ts         Combined entry point (api.ts + worker.ts) — used by `npm run dev`
+  src/migrate.ts        Standalone migration runner (needs DATABASE_URL) — `npm run migrate`
   src/routes/          One file per resource: auth, campaigns, accounts, calls,
-                       billing, escalations, reports, events (SSE), webhooks
+                       billing, escalations, reports, events (SSE), webhooks, health
   src/services/        Vapi/Claude/Twilio/Stripe integration wrappers + BillingCalculator
-  src/queues/          BullMQ queue + worker definitions (callAccountsQueue, billingQueue)
+  src/queues/          BullMQ queue + worker definitions (callAccountsQueue, billingQueue);
+                       redis.ts exports a shared Queue connection and a
+                       createWorkerConnection() factory (Workers need their own)
   src/events/          Redis-backed pub/sub + SSE fan-out (eventBus.ts)
   src/middleware/      JWT auth guard, error handler
   src/utils/           Pure helpers with unit tests (billingMath, phone)
@@ -58,12 +74,14 @@ frontend/            React dashboard (Vite + TypeScript)
   src/pages/           One file per route: Login, Signup, Dashboard, Campaigns,
                        CampaignDetail, AccountDetail (transcript + recording playback),
                        Escalations, Billing, Settings
-  src/components/      Layout (nav shell), ProtectedRoute, StatsCard
+  src/components/      Layout (nav shell), ProtectedRoute, StatsCard, ErrorBoundary
   src/lib/             api.ts (fetch wrapper with JWT), realtime.ts (SSE hook)
   src/store/           authStore.ts (Zustand, persisted to localStorage)
 
 database/
-  migrations/          Numbered SQL files (run in order) — tables, indexes, RLS policies
+  migrations/          Numbered SQL files, idempotent (safe to re-run) — tables,
+                       indexes, RLS policies. Apply via `npm run migrate` or paste
+                       into the SQL Editor.
   seed.sql             Sample data: one demo user, one campaign, three accounts
 
 .github/workflows/ci.yml   CI: typecheck + test + build for both apps
@@ -77,8 +95,9 @@ config/, docs/       Empty placeholder folders from initial scaffolding — unus
 ## 4. How to run locally
 
 **1. Database (Supabase)** — one-time setup:
-Create a project at supabase.com, then run every file in `database/migrations/` in
-order via the SQL Editor (or concatenate them into one paste). Optionally run
+Create a project at supabase.com. Then either run `npm run migrate` from `backend/`
+(needs `DATABASE_URL`, the direct Postgres connection string — see below), or paste
+every file in `database/migrations/` into the SQL Editor in order. Optionally run
 `database/seed.sql` for sample data.
 
 **2. Redis** — port `6379`:
@@ -89,13 +108,17 @@ docker compose up redis
 **3. Backend** — port `4000`:
 ```bash
 cd backend
-cp .env.example .env   # fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, REDIS_URL, JWT_SECRET
+cp .env.example .env   # fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, REDIS_URL, JWT_SECRET, PUBLIC_BACKEND_URL, FRONTEND_URL
                         # Vapi/Twilio/Anthropic/Stripe keys can stay blank except for actually placing calls
+                        # (missing required vars fail startup immediately with a clear error)
 npm install
 npm test                # unit tests
+npm run migrate          # one-time: applies database/migrations/ (needs DATABASE_URL)
 npm run dev              # runs API + worker together — http://localhost:4000
 ```
 Split into separate processes with `npm run dev:api` / `npm run dev:worker` if needed.
+Check readiness with `curl http://localhost:4000/health/ready` (verifies Supabase +
+Redis are actually reachable, not just that the process is up).
 
 **4. Frontend** — port `5173`:
 ```bash

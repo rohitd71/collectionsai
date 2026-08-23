@@ -1,9 +1,10 @@
 import { Queue, Worker } from 'bullmq';
 import { supabase } from '../db/supabase';
 import { publishEvent } from '../events/eventBus';
+import { logger } from '../logger';
 import { generateVapiPrompt } from '../services/ClaudeService';
 import { initiateVapiCall } from '../services/VapiService';
-import { connection } from './redis';
+import { connection, createWorkerConnection } from './redis';
 
 interface CallBatchJob {
   campaign_id: string;
@@ -67,7 +68,7 @@ export function startCallAccountsWorker() {
             .eq('id', account.id);
           queued += 1;
         } catch (err) {
-          console.error(`Failed to call account ${account.id}:`, err);
+          logger.error({ err, account_id: account.id }, 'Failed to call account');
         }
       }
 
@@ -77,6 +78,6 @@ export function startCallAccountsWorker() {
 
       return { calls_queued: queued };
     },
-    { connection }
+    { connection: createWorkerConnection() }
   );
 }

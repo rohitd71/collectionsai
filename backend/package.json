@@ -4,6 +4,9 @@
   "private": true,
   "type": "commonjs",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:api": "tsx watch src/api.ts",
@@ -12,6 +15,7 @@
     "start": "node dist/index.js",
     "start:api": "node dist/api.js",
     "start:worker": "node dist/worker.js",
+    "migrate": "tsx src/migrate.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -29,6 +33,9 @@
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "pg": "^8.13.0",
+    "pino": "^9.4.0",
+    "pino-http": "^10.3.0",
     "stripe": "^16.12.0",
     "twilio": "^5.3.0",
     "ws": "^8.18.0",
@@ -41,7 +48,9 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.5.5",
+    "@types/pg": "^8.11.10",
     "@types/ws": "^8.5.12",
+    "pino-pretty": "^11.2.2",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
     "vitest": "^4.1.11"

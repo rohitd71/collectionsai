@@ -1,10 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { env } from '../env';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
 // Sonnet is the cost/quality default for high-volume per-call generation;
 // override via env if a given deployment wants Opus-level analysis instead.
-const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
+const MODEL = env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
 
 interface Account {
   name: string;

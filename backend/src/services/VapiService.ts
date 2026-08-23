@@ -1,3 +1,5 @@
+import { env } from '../env';
+
 interface Account {
   id: string;
   name: string;
@@ -16,12 +18,12 @@ export async function initiateVapiCall(account: Account, systemPrompt: string): 
   const response = await fetch(`${VAPI_BASE_URL}/call`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.VAPI_API_KEY}`,
+      Authorization: `Bearer ${env.VAPI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      assistantId: process.env.VAPI_ASSISTANT_ID,
-      phoneNumberId: process.env.BUSINESS_PHONE_NUMBER,
+      assistantId: env.VAPI_ASSISTANT_ID,
+      phoneNumberId: env.BUSINESS_PHONE_NUMBER,
       customer: { number: account.phone, name: account.name },
       assistantOverrides: {
         model: {

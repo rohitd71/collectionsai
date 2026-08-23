@@ -1,7 +1,8 @@
 import Stripe from 'stripe';
 import { supabase } from '../db/supabase';
+import { env } from '../env';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(env.STRIPE_SECRET_KEY!);
 
 interface Billing {
   id: string;
@@ -40,7 +41,7 @@ export async function chargeMonthlyCommission(stripeCustomerId: string, billing:
 }
 
 export function constructWebhookEvent(rawBody: Buffer, signature: string) {
-  return stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET!);
+  return stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET!);
 }
 
 export async function handlePaymentSucceeded(invoiceId: string) {

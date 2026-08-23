@@ -14,9 +14,15 @@ dashboard updates, escalation handling, and Stripe commission billing.
 
 ## Local setup
 
-1. **Database**: create a Supabase project, then run each file in
-   `database/migrations/` in order via the Supabase SQL editor (or `psql`).
-   Optionally run `database/seed.sql` for sample data.
+1. **Database**: create a Supabase project. Then either:
+   - `cd backend && cp .env.example .env`, fill in `DATABASE_URL` (Settings ->
+     Database -> Connection string — the direct one, not the service_role key),
+     and run `npm run migrate` — applies every file in `database/migrations/`
+     in order, tracked in a `schema_migrations` table so re-running is a no-op, or
+   - paste each file in `database/migrations/` into the SQL Editor manually, in
+     order.
+
+   Optionally run `database/seed.sql` (via the SQL Editor) for sample data.
 
 2. **Redis** (job queue + realtime pub/sub): `docker compose up redis`, or any
    local/hosted Redis instance.
@@ -24,11 +30,17 @@ dashboard updates, escalation handling, and Stripe commission billing.
 3. **Backend**:
    ```bash
    cd backend
-   cp .env.example .env   # fill in Supabase, Vapi, Twilio, Anthropic, Stripe keys
+   cp .env.example .env   # fill in Supabase, Redis, JWT_SECRET; Vapi/Twilio/Anthropic/Stripe optional locally
    npm install
    npm test                # unit tests (billing math, phone normalization)
-   npm run dev              # http://localhost:4000
+   npm run dev              # http://localhost:4000 — fails fast with a clear
+                            # error if a required var is missing/malformed;
+                            # warns (doesn't fail) about unconfigured Vapi/
+                            # Twilio/Anthropic/Stripe keys
    ```
+   `GET /health` is a plain liveness check; `GET /health/ready` also verifies
+   Supabase and Redis are actually reachable — point an orchestrator's
+   readiness probe at the latter.
 
 4. **Frontend**:
    ```bash
@@ -64,6 +76,19 @@ dashboard updates, escalation handling, and Stripe commission billing.
 - **Deployment**: `backend/Dockerfile` + `docker-compose.yml` running the API
   and job-queue worker as separate processes/containers, `frontend/vercel.json`
   for the SPA.
+- **Production hardening**: fail-fast env validation (`backend/src/env.ts`) —
+  missing required config crashes at startup with a clear message instead of
+  failing obscurely mid-request; structured JSON logging via pino
+  (`backend/src/logger.ts`, redacts tokens/passwords, pretty-printed in dev);
+  graceful shutdown on SIGTERM/SIGINT (drains in-flight requests, waits for
+  in-progress BullMQ jobs to finish, closes Redis connections); a
+  dependency-checking `/health/ready` endpoint; CORS that fails closed (no
+  `FRONTEND_URL` configured means no browser origin is trusted, not "allow
+  everything"); and a `DATABASE_URL`-based migration runner
+  (`backend/src/migrate.ts`) replacing manual SQL-editor pasting. Also fixed:
+  BullMQ Workers now get their own dedicated Redis connection instead of
+  sharing one with their Queue — a shared connection's blocking calls can
+  stall unrelated commands under real load.
 
 ## Realtime architecture (a deliberate deviation from the original spec)
 
@@ -109,8 +134,15 @@ also keeps a 60s fallback poll in case the stream drops.
 
 - Account "likelihood to pay" scoring (the docs described a `scoreAccount`
   Claude call; not built — nothing in the UI would surface it yet)
-- Automated end-to-end tests against live Vapi/Twilio/Stripe/Supabase — the
-  unit tests cover pure logic (billing math, phone normalization) only, since
-  true E2E needs live third-party credentials this repo doesn't have
+- Automated E2E tests. The core flow (register -> login -> create campaign ->
+  upload CSV -> read back stats) has been manually verified end-to-end against
+  a real Supabase project, but there's no automated test suite driving that —
+  unit tests cover pure logic only (billing math, phone normalization). Vapi/
+  Twilio/Stripe call-placement paths are implemented but have never run
+  against live third-party accounts.
 - Multi-region/HA Redis for the job queue and realtime pub/sub (a single
   instance is assumed throughout)
+- `npm run migrate` is implemented and typechecked but hasn't been run against
+  a live database from this environment (needs `DATABASE_URL`, the direct
+  Postgres connection string with its password — a more sensitive credential
+  than the service_role key already in use, so it wasn't requested)

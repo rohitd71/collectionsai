@@ -1,12 +1,13 @@
 import twilio from 'twilio';
 import { supabase } from '../db/supabase';
+import { env } from '../env';
 
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
 
 export async function sendSms(accountId: string, phone: string, message: string) {
   const sms = await client.messages.create({
     body: message,
-    from: process.env.TWILIO_PHONE_NUMBER,
+    from: env.TWILIO_PHONE_NUMBER,
     to: phone,
   });
 
@@ -22,5 +23,5 @@ export async function sendSms(accountId: string, phone: string, message: string)
 }
 
 export function verifyTwilioSignature(signature: string, url: string, params: Record<string, string>) {
-  return twilio.validateRequest(process.env.TWILIO_AUTH_TOKEN!, signature, url, params);
+  return twilio.validateRequest(env.TWILIO_AUTH_TOKEN!, signature, url, params);
 }

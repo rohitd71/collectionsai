@@ -3,6 +3,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { supabase } from '../db/supabase';
+import { env } from '../env';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
 import { AuthedRequest, requireAuth } from '../middleware/auth';
 
@@ -20,7 +21,7 @@ const loginSchema = z.object({
 });
 
 function signToken(userId: string) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+  return jwt.sign({ userId }, env.JWT_SECRET, { expiresIn: '7d' });
 }
 
 router.post(

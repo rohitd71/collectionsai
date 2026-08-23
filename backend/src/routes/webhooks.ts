@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../db/supabase';
+import { env } from '../env';
 import { publishEvent } from '../events/eventBus';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
 import { analyzeTranscript, generateSmsTemplate } from '../services/ClaudeService';
@@ -16,7 +17,7 @@ router.post(
     // Vapi lets you configure a custom header on the server-URL webhook;
     // require it so an attacker can't forge "customer paid" call results.
     const secret = req.headers['x-webhook-secret'];
-    if (process.env.VAPI_WEBHOOK_SECRET && secret !== process.env.VAPI_WEBHOOK_SECRET) {
+    if (env.VAPI_WEBHOOK_SECRET && secret !== env.VAPI_WEBHOOK_SECRET) {
       throw new ApiError(401, 'Invalid webhook secret');
     }
 
@@ -106,11 +107,10 @@ router.post(
   '/twilio',
   asyncHandler(async (req, res) => {
     const signature = req.headers['x-twilio-signature'];
-    const publicUrl = process.env.PUBLIC_BACKEND_URL;
-    if (typeof signature !== 'string' || !publicUrl) {
-      throw new ApiError(400, 'Missing X-Twilio-Signature header or PUBLIC_BACKEND_URL not configured');
+    if (typeof signature !== 'string') {
+      throw new ApiError(400, 'Missing X-Twilio-Signature header');
     }
-    const valid = verifyTwilioSignature(signature, `${publicUrl}/webhooks/twilio`, req.body as Record<string, string>);
+    const valid = verifyTwilioSignature(signature, `${env.PUBLIC_BACKEND_URL}/webhooks/twilio`, req.body as Record<string, string>);
     if (!valid) throw new ApiError(403, 'Invalid Twilio signature');
 
     const { MessageSid, MessageStatus } = req.body as { MessageSid: string; MessageStatus: string };

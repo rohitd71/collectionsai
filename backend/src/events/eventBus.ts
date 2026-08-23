@@ -1,14 +1,14 @@
 import { randomUUID } from 'crypto';
 import { Response } from 'express';
 import IORedis from 'ioredis';
-
-const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
+import { env } from '../env';
+import { logger } from '../logger';
 
 // Redis pub/sub fans events out across every API instance; local clients
 // (this instance's open SSE connections) are kept in-memory and written to
 // whenever a message arrives on their user's channel.
-const publisher = new IORedis(REDIS_URL);
-const subscriber = new IORedis(REDIS_URL);
+const publisher = new IORedis(env.REDIS_URL);
+const subscriber = new IORedis(env.REDIS_URL);
 
 const localClients = new Map<string, Set<Response>>();
 
@@ -29,8 +29,14 @@ export interface DomainEvent {
 
 export function publishEvent(userId: string, event: DomainEvent) {
   publisher.publish(`user:${userId}:events`, JSON.stringify(event)).catch((err) => {
-    console.error('Failed to publish realtime event:', err);
+    logger.error({ err, userId, event }, 'Failed to publish realtime event');
   });
+}
+
+// Called from graceful shutdown so pub/sub connections don't linger after
+// the process is asked to exit.
+export async function closeEventBus() {
+  await Promise.allSettled([publisher.quit(), subscriber.quit()]);
 }
 
 export function registerClient(userId: string, res: Response) {

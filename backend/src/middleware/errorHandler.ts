@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import { logger } from '../logger';
 
 export class ApiError extends Error {
   status: number;
@@ -13,7 +14,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
   if (err instanceof ApiError) {
     return res.status(err.status).json({ error: err.message });
   }
-  console.error(err);
+  logger.error({ err }, 'Unhandled error');
   return res.status(500).json({ error: 'Internal server error' });
 }
 
