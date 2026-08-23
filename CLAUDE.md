@@ -131,3 +131,39 @@ npm run dev              # http://localhost:5173
 **Seeded demo login** (after running `database/seed.sql`):
 - Email: `demo@agency.test`
 - Password: `password123`
+
+## 5. Third-party integration setup (Vapi / Twilio / Stripe)
+
+None of these have been tested against live accounts yet. `PUBLIC_BACKEND_URL` must be
+a real, internet-reachable HTTPS URL for any of their webhooks to reach the backend —
+`localhost` won't work, so tunnel with `ngrok`/`cloudflared` for local testing and point
+each webhook config below at the tunnel URL.
+
+**Vapi** (`backend/src/services/VapiService.ts`, webhook: `routes/webhooks.ts`)
+- `VAPI_API_KEY` — Vapi dashboard → API Keys (private key)
+- `VAPI_ASSISTANT_ID` — an Assistant created in Vapi; the app overrides its system
+  prompt per-call, but the assistant still needs a base voice/model config
+- `BUSINESS_PHONE_NUMBER` — a phone number **ID** purchased/imported in Vapi (used as
+  `phoneNumberId`, not a raw phone string, despite the env var name)
+- `VAPI_WEBHOOK_SECRET` — any long random string you generate yourself
+- Setup: on the assistant's **Server URL** webhook config, set it to
+  `https://<PUBLIC_BACKEND_URL>/webhooks/vapi` with a custom header
+  `x-webhook-secret: <VAPI_WEBHOOK_SECRET>` — checked in `webhooks.ts` to authenticate
+  the callback.
+
+**Twilio** (`backend/src/services/TwilioService.ts`, webhook: `routes/webhooks.ts`)
+- `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` — Twilio Console dashboard
+- `TWILIO_PHONE_NUMBER` — an SMS-capable Twilio number in E.164 format
+- Setup: on that number's Messaging config, set the status-callback URL to
+  `https://<PUBLIC_BACKEND_URL>/webhooks/twilio`. Signature verification is computed
+  against `PUBLIC_BACKEND_URL` exactly, so it must match the publicly reachable URL
+  byte-for-byte (scheme + host, no trailing slash).
+
+**Stripe** (`backend/src/services/StripeService.ts`, webhook: `routes/webhooks.ts`)
+- `STRIPE_SECRET_KEY` — Stripe Dashboard → Developers → API keys
+- `STRIPE_WEBHOOK_SECRET` — generated when the webhook endpoint below is registered
+- Setup: Dashboard → Developers → Webhooks → add endpoint
+  `https://<PUBLIC_BACKEND_URL>/webhooks/stripe`, subscribe to
+  `invoice.payment_succeeded`, copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
+  Each agency's `billing` row also needs a `stripe_customer_id` populated (a Stripe
+  Customer created for them) before `chargeMonthlyCommission` will work.
